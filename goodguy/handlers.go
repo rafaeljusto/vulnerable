@@ -14,6 +14,10 @@ import (
 	"time"
 )
 
+func init() {
+	rand.Seed(time.Now().UTC().UnixNano())
+}
+
 func handleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.RequestURI == "/favicon.ico" {
 		handleFavicon(w)
@@ -242,6 +246,66 @@ func buildUpdateOutput(w http.ResponseWriter, data registerData) {
 
 	if err = t.Execute(w, data); err != nil {
 		log.Printf("error executing update template. details: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+}
+
+func handleSearch(w http.ResponseWriter, r *http.Request) {
+	if r.RequestURI == "/favicon.ico" {
+		handleFavicon(w)
+		return
+	}
+
+	username := r.FormValue("username")
+	username = strings.TrimSpace(username)
+	username = strings.ToLower(username)
+
+	data := searchData{
+		Username: username,
+	}
+
+	if user, err := validateSession(r); err == nil {
+		data.LoggedUsername = user.Username
+	}
+
+	if r.Method == "GET" || data.Username == "" {
+		buildSearchOutput(w, data)
+		return
+	}
+
+	usersLock.Lock()
+	defer usersLock.Unlock()
+
+	if user, ok := users[data.Username]; ok {
+		data.Result = user
+	} else {
+		data.ErrorMessage = "Username not found"
+	}
+
+	buildSearchOutput(w, data)
+}
+
+func buildSearchOutput(w http.ResponseWriter, data searchData) {
+	var err error
+
+	data.Menu = menuSearch
+
+	t := template.New("search").Funcs(template.FuncMap{
+		"toHTML": func(input string) template.HTML {
+			return template.HTML(input)
+		},
+	})
+	t, err = t.Parse(searchTmpl)
+
+	if err != nil {
+		log.Printf("error parsing search template. details: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if err = t.Execute(w, data); err != nil {
+		log.Printf("error executing search template. details: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

@@ -27,6 +27,10 @@ var headerTmpl = `<!doctype html>
           <li class="nav-item {{if eq .Menu "login"}}active{{end}}">
             <a class="nav-link" href="/">Login</a>
           </li>
+          {{else}}
+          <li class="nav-item {{if eq .Menu "update"}}active{{end}}">
+            <a class="nav-link" href="/">Update</a>
+          </li>
           {{end}}
           <li class="nav-item {{if eq .Menu "register"}}active{{end}}">
             <a class="nav-link" href="/register">Register</a>
@@ -66,6 +70,7 @@ var footerTmpl = `
     <script src="https://code.jquery.com/jquery-3.1.1.slim.min.js" integrity="sha384-A7FZj7v+d/sdmMqp/nOQwliLvUsJfDHW+k9Omg/a/EheAdgtzNs3hpfag6Ed950n" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tether/1.4.0/js/tether.min.js" integrity="sha384-DztdAPBWPRXSA/3eYEEUWrWCy7G5KFbe8fFjk5JAIxUYHKkDx6Qin1DkWx51bBrb" crossorigin="anonymous"></script>
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-alpha.6/js/bootstrap.min.js" integrity="sha384-vBWWzlZJ8ea9aCX4pEW3rVHjgjt7zpkNpZk+02D9phzyeVkE+jo0ieGizqPLForn" crossorigin="anonymous"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.6.4/angular.min.js" crossorigin="anonymous"></script>
   </body>
 </html>
 `
@@ -127,6 +132,40 @@ var updateTmpl = headerTmpl + `
         </p>
       </fieldset>
     </form>` + footerTmpl
+
+var searchTmpl = headerTmpl + `
+    <form action="/search" method="post">
+      <fieldset class="form-group">
+        <legend>Search</legend>
+        <p>
+          <label for="username">Username</label>
+          <input type="text" name="username" id="username" value="{{.Username}}" class="form-control" />
+        </p>
+        <p>
+          <button type="submit" class="btn btn-primary">Search</button>
+        </p>
+      </fieldset>
+    </form>
+    {{if ne .Result.Username ""}}
+    <div data-ng-app>
+      <div class="row">
+        <div class="col-lg-12 col-md-12 col-sm-12 col-xs-12">
+          <h3>
+            {{toHTML .Result.Username}}
+            <small class="text-muted">result</small>
+          </h3>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-lg-4 col-md-4 col-sm-12 col-xs-12">
+          <label><strong>Name</strong></label>
+        </div>
+        <div class="col-lg-8 col-md-8 col-sm-12 col-xs-12">
+          {{toHTML .Result.Name}}
+        </div>
+      </div>
+    </div>
+    {{end}}` + footerTmpl
 
 var faviconData = `/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBw8QEhIQEBIVFRUXFRcYFxcVERcVFhYWFRUYFhcT
 FxUaHSggGBomHxUVITEhJSkrLi4uGB8zODMsNygtLisBCgoKDg0OGxAQGi0mICYtLS8tLS0tLS0r

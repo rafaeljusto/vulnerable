@@ -35,6 +35,12 @@ type registerData struct {
 	user
 }
 
+type searchData struct {
+	basicData
+	Username string
+	Result   user
+}
+
 type user struct {
 	Name         string
 	Username     string
