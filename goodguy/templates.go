@@ -2,7 +2,7 @@ package main
 
 var headerTmpl = `<!doctype html>
 <html lang="en">
-  <header>
+  <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <title>Good Guy</title>
@@ -13,7 +13,7 @@ var headerTmpl = `<!doctype html>
         padding-top: 7rem;
       }
     </style>
-  </header>
+  </head>
   <body>
     <nav class="navbar navbar-toggleable-md navbar-inverse bg-primary fixed-top">
       <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
