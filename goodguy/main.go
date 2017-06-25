@@ -37,6 +37,12 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if _, err := validateSession(r); err == nil {
+		w.Header().Set("Location", "/update")
+		w.WriteHeader(http.StatusSeeOther)
+		return
+	}
+
 	username := r.FormValue("username")
 	username = strings.TrimSpace(username)
 	username = strings.ToLower(username)
@@ -54,7 +60,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if username == "" || password == "" {
-		data.Message = "missing username or password for login"
+		data.ErrorMessage = "Missing username or password for login"
 		buildLoginOutput(w, data)
 		return
 	}
@@ -71,13 +77,15 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusSeeOther)
 
 	} else {
-		data.Message = "wrong username or password"
+		data.ErrorMessage = "Wrong username or password"
 		buildLoginOutput(w, data)
 	}
 }
 
 func buildLoginOutput(w http.ResponseWriter, data loginData) {
 	var err error
+
+	data.Menu = menuLogin
 
 	t := template.New("login")
 	t, err = t.Parse(loginTmpl)
@@ -120,13 +128,17 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
+	if user, err := validateSession(r); err == nil {
+		data.LoggedUsername = user.Username
+	}
+
 	if r.Method == "GET" {
 		buildRegisterOutput(w, data)
 		return
 	}
 
 	if username == "" || password == "" || name == "" {
-		data.Message = "not all fields were filled"
+		data.ErrorMessage = "Not all fields were filled"
 		buildRegisterOutput(w, data)
 		return
 	}
@@ -135,20 +147,24 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 	defer usersLock.Unlock()
 
 	if _, ok := users[username]; ok {
-		data.Message = "username already in use"
+		data.ErrorMessage = "Username already in use"
 		buildRegisterOutput(w, data)
 		return
 	}
 
 	users[username] = data.user
 	buildLoginOutput(w, loginData{
+		basicData: basicData{
+			SuccessMessage: "Your account was created successfully",
+		},
 		Username: username,
-		Message:  "your account was created successfully",
 	})
 }
 
 func buildRegisterOutput(w http.ResponseWriter, data registerData) {
 	var err error
+
+	data.Menu = menuRegister
 
 	t := template.New("register")
 	t, err = t.Parse(registerTmpl)
@@ -172,43 +188,20 @@ func handleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session, err := r.Cookie("session")
-	if err == http.ErrNoCookie {
+	user, err := validateSession(r)
+	if err != nil {
 		buildLoginOutput(w, loginData{
-			Message: "invalid session",
-		})
-		return
-	}
-
-	if len(session.Value) < 64 {
-		buildLoginOutput(w, loginData{
-			Message: "invalid session size",
-		})
-		return
-	}
-
-	hash := session.Value[:64]
-	username := session.Value[64:]
-
-	usersLock.Lock()
-	user, ok := users[username]
-	usersLock.Unlock()
-
-	if !ok {
-		buildLoginOutput(w, loginData{
-			Message: "invalid session username",
-		})
-		return
-	}
-
-	if hash != generateSessionHash(user, r.RemoteAddr) {
-		buildLoginOutput(w, loginData{
-			Message: "invalid session auth",
+			basicData: basicData{
+				ErrorMessage: err.Error(),
+			},
 		})
 		return
 	}
 
 	data := registerData{
+		basicData: basicData{
+			LoggedUsername: user.Username,
+		},
 		user: user,
 	}
 
@@ -229,19 +222,21 @@ func handleUpdate(w http.ResponseWriter, r *http.Request) {
 	usersLock.Lock()
 	defer usersLock.Unlock()
 
-	if _, ok := users[username]; ok {
-		data.Message = "username already in use"
+	if _, ok := users[user.Username]; ok {
+		data.ErrorMessage = "Username already in use"
 		buildRegisterOutput(w, data)
 		return
 	}
 
-	users[username] = data.user
-	data.Message = "updated successfully"
+	users[user.Username] = data.user
+	data.SuccessMessage = "Updated successfully"
 	buildUpdateOutput(w, data)
 }
 
 func buildUpdateOutput(w http.ResponseWriter, data registerData) {
 	var err error
+
+	data.Menu = menuUpdate
 
 	t := template.New("update")
 	t, err = t.Parse(updateTmpl)
@@ -275,6 +270,34 @@ func handleFavicon(w http.ResponseWriter) {
 	}
 }
 
+func validateSession(r *http.Request) (user, error) {
+	session, err := r.Cookie("session")
+	if err == http.ErrNoCookie {
+		return user{}, fmt.Errorf("Invalid session")
+	}
+
+	if len(session.Value) < 64 {
+		return user{}, fmt.Errorf("Invalid session size")
+	}
+
+	hash := session.Value[:64]
+	username := session.Value[64:]
+
+	usersLock.Lock()
+	user, ok := users[username]
+	usersLock.Unlock()
+
+	if !ok {
+		return user, fmt.Errorf("Invalid session username")
+	}
+
+	if hash != generateSessionHash(user, r.RemoteAddr) {
+		return user, fmt.Errorf("Invalid session auth")
+	}
+
+	return user, nil
+}
+
 func generateSessionHash(u user, remoteAddr string) string {
 	ip, _, _ := net.SplitHostPort(remoteAddr)
 
@@ -283,14 +306,30 @@ func generateSessionHash(u user, remoteAddr string) string {
 	return fmt.Sprintf("%x", hash.Sum(nil))
 }
 
+const (
+	menuLogin    menu = "login"
+	menuUpdate   menu = "update"
+	menuRegister menu = "register"
+	menuSearch   menu = "search"
+)
+
+type menu string
+
+type basicData struct {
+	Menu           menu
+	LoggedUsername string
+	ErrorMessage   string
+	SuccessMessage string
+}
+
 type loginData struct {
+	basicData
 	Username string
-	Message  string
 }
 
 type registerData struct {
+	basicData
 	user
-	Message string
 }
 
 type user struct {
@@ -300,80 +339,133 @@ type user struct {
 	randomSource int
 }
 
-var loginTmpl = `<!doctype html>
-<html>
-  <body>
-	  <div>{{.Message}}</div>
-	  <form action="/" method="post">
-		  <fieldset>
-			  <legend>Login</legend>
-			  <p>
-			    <label for="username">Username</label>
-				  <input type="text" name="username" id="username" value="{{.Username}}" />
-				</p>
-			  <p>
-			    <label for="password">Password</label>
-				  <input type="password" name="password" id="password" />
-				</p>
-        <p>
-				  <input type="submit" value="Login" />
-        </p>
-			</fieldset>
-		</form>
-		<a href="/register">Register</a>
-		<a href="/search">Search</a>
-	</body>
-</html>`
+var headerTmpl = `<!doctype html>
+<html lang="en">
+  <header>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>Good Guy</title>
 
-var registerTmpl = `<!doctype html>
-<html>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-alpha.6/css/bootstrap.min.css" integrity="sha384-rwoIResjU2yc3z8GV/NPeZWAv56rSmLldC3R/AZzGRnGxQQKnKkoFVhFQhNUwEyJ" crossorigin="anonymous">
+    <style>
+      body {
+        padding-top: 7rem;
+      }
+    </style>
+  </header>
   <body>
-	  <div>{{.Message}}</div>
-	  <form action="/register" method="post">
-		  <fieldset>
-			  <legend>Registration</legend>
-				<p>
-			    <label for="name">Name</label>
-				  <input type="text" name="name" id="name" value="{{.Name}}" />
-				</p>
-			  <p>
-			    <label for="username">Username</label>
-				  <input type="text" name="username" id="username" value="{{.Username}}" />
-				</p>
-			  <p>
-			    <label for="password">Password</label>
-				  <input type="password" name="password" id="password" />
-				</p>
-        <p>
-				  <input type="submit" value="Register" />
-        </p>
-			</fieldset>
-		</form>
-	</body>
-</html>`
+    <nav class="navbar navbar-toggleable-md navbar-inverse bg-primary fixed-top">
+      <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <a class="navbar-brand" href="#">GoodGuy</a>
 
-var updateTmpl = `<!doctype html>
-<html>
-  <body>
-	  <div>{{.Message}}</div>
-	  <form action="/update" method="post">
-		  <fieldset>
-			  <legend>Update {{.Username}}</legend>
-				<p>
-			    <label for="name">Name</label>
-				  <input type="text" name="name" id="name" value="{{.Name}}" />
-				</p>
-			  <p>
-			    <label for="password">Password</label>
-				  <input type="password" name="password" id="password" />
-				</p>
+      <div class="collapse navbar-collapse" id="navbarSupportedContent">
+        <ul class="navbar-nav mr-auto">
+          {{if eq .LoggedUsername ""}}
+          <li class="nav-item {{if eq .Menu "login"}}active{{end}}">
+            <a class="nav-link" href="/">Login</a>
+          </li>
+          {{end}}
+          <li class="nav-item {{if eq .Menu "register"}}active{{end}}">
+            <a class="nav-link" href="/register">Register</a>
+          </li>
+          <li class="nav-item {{if eq .Menu "search"}}active{{end}}">
+            <a class="nav-link" href="/search">Search</a>
+          </li>
+          {{if ne .LoggedUsername ""}}
+          <li class="nav-item">
+            <a class="nav-link" href="/logout"><strong>Logout</strong></a>
+          </li>
+          {{end}}
+        </ul>
+      </div>
+
+      {{if ne .LoggedUsername ""}}
+      <span class="navbar-text">
+        [{{.LoggedUsername}}]
+      </span>
+      {{end}}
+    </nav>
+    <div class="container">
+      {{if gt (len .SuccessMessage) 0}}
+      <div class="alert alert-success" role="alert">
+        {{.SuccessMessage}}
+      </div>
+      {{end}}
+      {{if gt (len .ErrorMessage) 0}}
+      <div class="alert alert-danger" role="alert">
+        {{.ErrorMessage}}
+      </div>
+      {{end}}
+`
+
+var footerTmpl = `
+    </div>
+    <script src="https://code.jquery.com/jquery-3.1.1.slim.min.js" integrity="sha384-A7FZj7v+d/sdmMqp/nOQwliLvUsJfDHW+k9Omg/a/EheAdgtzNs3hpfag6Ed950n" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tether/1.4.0/js/tether.min.js" integrity="sha384-DztdAPBWPRXSA/3eYEEUWrWCy7G5KFbe8fFjk5JAIxUYHKkDx6Qin1DkWx51bBrb" crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-alpha.6/js/bootstrap.min.js" integrity="sha384-vBWWzlZJ8ea9aCX4pEW3rVHjgjt7zpkNpZk+02D9phzyeVkE+jo0ieGizqPLForn" crossorigin="anonymous"></script>
+  </body>
+</html>
+`
+
+var loginTmpl = headerTmpl + `
+      <form action="/" method="post">
+        <fieldset class="form-group">
+          <legend>Login</legend>
+          <p>
+            <label for="username">Username</label>
+            <input type="text" name="username" id="username" value="{{.Username}}" class="form-control" />
+          </p>
+          <p>
+            <label for="password">Password</label>
+            <input type="password" name="password" id="password" class="form-control" />
+          </p>
+          <p>
+            <button type="submit" class="btn btn-primary">Login</button>
+          </p>
+        </fieldset>
+      </form>` + footerTmpl
+
+var registerTmpl = headerTmpl + `
+    <form action="/register" method="post">
+      <fieldset class="form-group">
+        <legend>Registration</legend>
         <p>
-				  <input type="submit" value="Update" />
+          <label for="name">Name</label>
+          <input type="text" name="name" id="name" value="{{.Name}}" class="form-control" />
         </p>
-			</fieldset>
-		</form>
-	</body>
-</html>`
+        <p>
+          <label for="username">Username</label>
+          <input type="text" name="username" id="username" value="{{.Username}}" class="form-control" />
+        </p>
+        <p>
+          <label for="password">Password</label>
+          <input type="password" name="password" id="password" class="form-control" />
+        </p>
+        <p>
+          <button type="submit" class="btn btn-primary">Register</button>
+        </p>
+      </fieldset>
+    </form>` + footerTmpl
+
+var updateTmpl = headerTmpl + `
+    <form action="/update" method="post">
+      <fieldset class="form-group">
+        <legend>Update {{.Username}}</legend>
+        <p>
+          <label for="name">Name</label>
+          <input type="text" name="name" id="name" value="{{.Name}}" class="form-control" />
+        </p>
+        <p>
+          <label for="password">Password</label>
+          <input type="password" name="password" id="password" class="form-control" />
+        </p>
+        <p>
+          <button type="submit" class="btn btn-primary">Update</button>
+        </p>
+      </fieldset>
+    </form>` + footerTmpl
 
 var faviconData = `/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBw8QEhIQEBIVFRUXFRcYFxcVERcVFhYWFRUYFhcT
 FxUaHSggGBomHxUVITEhJSkrLi4uGB8zODMsNygtLisBCgoKDg0OGxAQGi0mICYtLS8tLS0tLS0r
