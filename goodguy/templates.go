@@ -12,6 +12,13 @@ var headerTmpl = `<!doctype html>
       body {
         padding-top: 7rem;
       }
+
+      .result {
+        border-bottom: 2px solid #eeeeee;
+        border-top: 2px solid #eeeeee;
+        padding: 10px 0px 5px 0px;
+        margin-bottom: 10px;
+      }
     </style>
   </head>
   <body>
@@ -147,7 +154,7 @@ var searchTmpl = headerTmpl + `
       </fieldset>
     </form>
     {{if ne .Result.Username ""}}
-    <div data-ng-app>
+    <div data-ng-app class="result">
       <div class="row">
         <div class="col-lg-12 col-md-12 col-sm-12 col-xs-12">
           <h3>
@@ -165,7 +172,12 @@ var searchTmpl = headerTmpl + `
         </div>
       </div>
     </div>
-    {{end}}` + footerTmpl
+    {{end}}
+    <div class="row">
+      <div class="col-lg-12 col-md-12 col-sm-12 col-xs-12">
+        <p>System has currently {{.NumberOfUsers}} users.</p>
+      </div>
+    </div>` + footerTmpl
 
 var faviconData = `/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBw8QEhIQEBIVFRUXFRcYFxcVERcVFhYWFRUYFhcT
 FxUaHSggGBomHxUVITEhJSkrLi4uGB8zODMsNygtLisBCgoKDg0OGxAQGi0mICYtLS8tLS0tLS0r

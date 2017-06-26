@@ -37,8 +37,9 @@ type registerData struct {
 
 type searchData struct {
 	basicData
-	Username string
-	Result   user
+	NumberOfUsers int
+	Username      string
+	Result        user
 }
 
 type user struct {

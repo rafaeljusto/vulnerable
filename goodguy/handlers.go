@@ -262,7 +262,8 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 	username = strings.ToLower(username)
 
 	data := searchData{
-		Username: username,
+		NumberOfUsers: len(users),
+		Username:      username,
 	}
 
 	if user, err := validateSession(r); err == nil {
