@@ -15,7 +15,7 @@ workshop at Costa Rica.
 Download the project with the following command:
 
 ```
-go get -u github.com/rafaeljusto/vunerable/...
+go get -u github.com/rafaeljusto/vulnerable/...
 ```
 
 Make sure that your `$GOPATH/bin` is in your `$PATH` environment. The just run
